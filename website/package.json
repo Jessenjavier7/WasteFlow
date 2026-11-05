@@ -1,0 +1,41 @@
+{
+  "name": "website",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.11.3",
+    "@prisma/client": "^6.5.0",
+    "@vercel/blob": "^2.8.2",
+    "bcryptjs": "^3.0.3",
+    "google-auth-library": "^11.3.2",
+    "jose": "^6.2.15",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.66.0",
+    "next": "16.4.4",
+    "next-auth": "^5.0.0-beta.32",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-leaflet": "^5.0.0",
+    "sweetalert2": "^11.26.25",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/leaflet": "^1.9.22",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.4",
+    "prisma": "^6.5.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

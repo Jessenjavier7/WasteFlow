@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ReportStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum PredictionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+// ========================================
+// USERS
+// ========================================
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String?
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+
+  passwordHash String?
+
+  image     String?
+  role      UserRole @default(USER)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Auth.js Relations
+  accounts Account[]
+  // sessions Session[]
+
+  // Waste Management Relations
+  wasteReports    WasteReport[]
+  statusHistories ReportStatusHistory[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String @id @default(cuid())
+  userId            String @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String @map("provider_account_id")
+
+  refresh_token String? @db.Text
+  access_token  String? @db.Text
+  expires_at    Int?
+  token_type    String?
+  scope         String?
+  id_token      String? @db.Text
+  session_state String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+// model Session {
+//   id           String   @id @default(cuid())
+//   sessionToken String   @unique @map("session_token")
+//   userId       String   @map("user_id") @db.Uuid
+//   expires      DateTime
+
+//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@index([userId])
+//   @@map("sessions")
+// }
+
+// ========================================
+// WASTE CATEGORIES
+// ========================================
+
+model WasteCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  wasteReports WasteReport[] @relation("ConfirmedCategory")
+  // aiPredictions AiPrediction[] @relation("PredictedCategory")
+
+  @@map("waste_categories")
+}
+
+// ========================================
+// WASTE REPORTS
+// ========================================
+
+model WasteReport {
+  id                  String       @id @default(uuid()) @db.Uuid
+  userId              String       @map("user_id") @db.Uuid
+  confirmedCategoryId String?      @map("confirmed_category_id") @db.Uuid
+  description         String?      @db.Text
+  title               String       @db.VarChar(100)
+  latitude            Float?
+  longitude           Float?
+  address             String?      @db.Text
+  status              ReportStatus @default(PENDING)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  confirmedCategory WasteCategory? @relation("ConfirmedCategory", fields: [confirmedCategoryId], references: [id], onDelete: SetNull)
+
+  // aiPredictions   AiPrediction[]
+  images          ReportImage[]
+  statusHistories ReportStatusHistory[]
+
+  @@index([userId])
+  @@index([confirmedCategoryId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("waste_reports")
+}
+
+// ========================================
+// AI PREDICTIONS
+// ========================================
+
+// model AiPrediction {
+//   id                  String           @id @default(uuid()) @db.Uuid
+//   reportId            String           @map("report_id") @db.Uuid
+//   predictedCategoryId String           @map("predicted_category_id") @db.Uuid
+//   confidence          Decimal          @db.Decimal(5, 4)
+//   modelVersion        String           @map("model_version") @db.VarChar(50)
+//   predictionStatus    PredictionStatus @default(PENDING) @map("prediction_status")
+//   createdAt           DateTime         @default(now()) @map("created_at")
+
+//   // Relations
+//   report WasteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+//   predictedCategory WasteCategory @relation("PredictedCategory", fields: [predictedCategoryId], references: [id], onDelete: Restrict)
+
+//   @@index([reportId])
+//   @@index([predictedCategoryId])
+//   @@map("ai_predictions")
+// }
+
+// ========================================
+// REPORT IMAGES
+// ========================================
+
+model ReportImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  reportId  String   @map("report_id") @db.Uuid
+  imageUrl  String   @map("image_url") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  report WasteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_images")
+}
+
+// ========================================
+// REPORT STATUS HISTORIES
+// ========================================
+
+model ReportStatusHistory {
+  id        String        @id @default(uuid()) @db.Uuid
+  reportId  String        @map("report_id") @db.Uuid
+  changedBy String        @map("changed_by") @db.Uuid
+  oldStatus ReportStatus? @map("old_status")
+  newStatus ReportStatus  @map("new_status")
+  note      String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  report WasteReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [changedBy], references: [id], onDelete: Restrict)
+
+  @@index([reportId])
+  @@index([changedBy])
+  @@index([createdAt])
+  @@map("report_status_histories")
+}
