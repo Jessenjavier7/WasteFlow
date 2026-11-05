@@ -9,6 +9,7 @@ import {
   Pressable,
   Image,
   TextInput,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -94,6 +95,8 @@ export default function MyReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+
   // Fetch reports from API
   const fetchReports = useCallback(
     async (isRefresh = false) => {
@@ -138,6 +141,70 @@ export default function MyReportsScreen() {
     },
     [router],
   );
+
+  // Navigate to edit report screen
+  const handleEdit = (reportId: string) => {
+    router.push({
+      pathname: "/edit-report/[id]",
+      params: { id: reportId },
+    });
+  };
+
+  // Delete report
+  const handleDelete = (reportId: string) => {
+    Alert.alert(
+      "Delete Report",
+      "Are you sure you want to delete this report? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setDeletingReportId(reportId);
+
+              const response = await authenticatedFetch(
+                `/api/delete-report/${reportId}`,
+                {
+                  method: "DELETE",
+                },
+              );
+
+              const result = await response.json();
+
+              if (!response.ok || !result.success) {
+                throw new Error(result.message || "Failed to delete report.");
+              }
+
+              // Remove deleted report from the local list
+              setReports((previousReports) =>
+                previousReports.filter((report) => report.id !== reportId),
+              );
+
+              Alert.alert("Success", "Your report has been deleted.");
+            } catch (err) {
+              const message =
+                err instanceof Error ? err.message : "Something went wrong.";
+
+              if (message.toLowerCase().includes("session expired")) {
+                router.replace("/login");
+                return;
+              }
+
+              Alert.alert("Delete Failed", message);
+            } finally {
+              setDeletingReportId(null);
+            }
+          },
+        },
+      ],
+      { cancelable: true },
+    );
+  };
 
   // Fetch data whenever My Reports tab becomes active
   useFocusEffect(
@@ -266,6 +333,41 @@ export default function MyReportsScreen() {
             {item.description}
           </Text>
         ) : null}
+
+        {/* Report Actions */}
+        <View style={styles.actionContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.editButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => handleEdit(item.id)}
+            disabled={deletingReportId === item.id}
+          >
+            <Ionicons name="create-outline" size={17} color="#16A34A" />
+
+            <Text style={styles.editButtonText}>Edit</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.deleteButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => handleDelete(item.id)}
+            disabled={deletingReportId === item.id}
+          >
+            {deletingReportId === item.id ? (
+              <ActivityIndicator size="small" color="#DC2626" />
+            ) : (
+              <Ionicons name="trash-outline" size={17} color="#DC2626" />
+            )}
+
+            <Text style={styles.deleteButtonText}>
+              {deletingReportId === item.id ? "Deleting..." : "Delete"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     );
   };
@@ -419,6 +521,54 @@ export default function MyReportsScreen() {
 }
 
 const styles = StyleSheet.create({
+  // Report Actions
+  actionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+
+  editButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DCFCE7",
+    paddingVertical: 11,
+    borderRadius: 9,
+    gap: 7,
+  },
+
+  editButtonText: {
+    color: "#16A34A",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  deleteButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEE2E2",
+    paddingVertical: 11,
+    borderRadius: 9,
+    gap: 7,
+  },
+
+  deleteButtonText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  buttonPressed: {
+    opacity: 0.7,
+  },
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
