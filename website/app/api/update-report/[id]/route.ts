@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { getMobileUserFromRequest } from "@/app/lib/mobile-auth";
 import { createReportSchema } from "@/app/validation/zod";
 
 import { put, del } from "@vercel/blob";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+
+export const runtime = "nodejs";
 
 // PATCH /api/update-report/[id]
 export async function PATCH(
@@ -16,27 +19,82 @@ export async function PATCH(
   let uploadedBlobUrl: string | null = null;
 
   try {
-    // 1. Check authentication
-    const session = await auth();
+    // 1. Authentication: Mobile Bearer Token or Website Auth.js Session
+    let userId: string | null = null;
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "You must be logged in to update a report.",
-        },
-        { status: 401 },
-      );
-    }
+    const authorization = request.headers.get("authorization");
 
-    if (session.user.role !== "USER") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Only users can update waste reports.",
+    if (authorization) {
+      // Mobile authentication
+      if (!authorization.startsWith("Bearer ")) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid authorization header.",
+          },
+          { status: 401 },
+        );
+      }
+
+      const mobileUser = await getMobileUserFromRequest(request);
+
+      if (!mobileUser) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid or expired access token.",
+          },
+          { status: 401 },
+        );
+      }
+
+      // Verify user and role using database
+      const user = await prisma.user.findUnique({
+        where: {
+          id: mobileUser.userId,
         },
-        { status: 403 },
-      );
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user || user.role !== "USER") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unauthorized access.",
+          },
+          { status: 403 },
+        );
+      }
+
+      userId = user.id;
+    } else {
+      // Website authentication
+      const session = await auth();
+
+      if (!session?.user?.id) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "You must be logged in to update a report.",
+          },
+          { status: 401 },
+        );
+      }
+
+      if (session.user.role !== "USER") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Only users can update waste reports.",
+          },
+          { status: 403 },
+        );
+      }
+
+      userId = session.user.id;
     }
 
     // 2. Get report ID from URL
@@ -108,7 +166,7 @@ export async function PATCH(
     const existingReport = await prisma.wasteReport.findFirst({
       where: {
         id: reportId,
-        userId: session.user.id,
+        userId,
       },
       include: {
         images: {
@@ -228,6 +286,7 @@ export async function PATCH(
           latitude,
           longitude,
           confirmedCategoryId: category,
+
           // Status, userId, and createdAt remain unchanged.
         },
       });
@@ -260,12 +319,16 @@ export async function PATCH(
     const shouldDeleteOldImages =
       uploadedBlobUrl !== null || removeExistingImage;
 
+    let blobCleanupSuccess = true;
+
     if (shouldDeleteOldImages && oldImageUrls.length > 0 && blobToken) {
       try {
         await del(oldImageUrls, {
           token: blobToken,
         });
       } catch (deleteError) {
+        blobCleanupSuccess = false;
+
         // Database update already succeeded
         console.error("Failed to delete old Blob images:", deleteError);
       }
@@ -280,7 +343,13 @@ export async function PATCH(
     return NextResponse.json(
       {
         success: true,
-        message: "Waste report updated successfully!",
+        message: blobCleanupSuccess
+          ? "Waste report updated successfully!"
+          : "Report updated, but the old image could not be removed from Blob.",
+        data: {
+          reportId: existingReport.id,
+          blobCleanupSuccess,
+        },
       },
       { status: 200 },
     );

@@ -2,25 +2,83 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { getMobileUserFromRequest } from "@/app/lib/mobile-auth";
 
 import { del } from "@vercel/blob";
+
+export const runtime = "nodejs";
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // 1. Validate session
-    const session = await auth();
+    let userId: string | null = null;
 
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Unauthorized. Please login first.",
+    // 1. Authentication: Mobile Bearer Token or Website Auth.js Session
+    const authorization = request.headers.get("authorization");
+
+    if (authorization) {
+      // Mobile authentication
+      if (!authorization.startsWith("Bearer ")) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid authorization header.",
+          },
+          { status: 401 },
+        );
+      }
+
+      const mobileUser = await getMobileUserFromRequest(request);
+
+      if (!mobileUser) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Invalid or expired access token.",
+          },
+          { status: 401 },
+        );
+      }
+
+      // Verify user and role using database
+      const user = await prisma.user.findUnique({
+        where: {
+          id: mobileUser.userId,
         },
-        { status: 401 },
-      );
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user || user.role !== "USER") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unauthorized access.",
+          },
+          { status: 403 },
+        );
+      }
+
+      userId = user.id;
+    } else {
+      // Website authentication
+      const session = await auth();
+
+      if (!session?.user?.id) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Unauthorized. Please login first.",
+          },
+          { status: 401 },
+        );
+      }
+
+      userId = session.user.id;
     }
 
     // 2. Get report ID
@@ -44,7 +102,7 @@ export async function DELETE(
     const report = await prisma.wasteReport.findFirst({
       where: {
         id,
-        userId: session.user.id,
+        userId,
       },
       include: {
         images: {
@@ -70,7 +128,7 @@ export async function DELETE(
     // 4. Get image URLs
     const imageUrls = report.images.map((image) => image.imageUrl);
 
-    // 5. Validate Vercel Blob token before deleting database records
+    // 5. Validate Blob token before deleting database records
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
 
     if (imageUrls.length > 0 && !blobToken) {
@@ -87,15 +145,13 @@ export async function DELETE(
     }
 
     // 6. Delete report from database
-    // Related ReportImage and status history records
-    // will be deleted if onDelete: Cascade is configured.
     await prisma.wasteReport.delete({
       where: {
         id: report.id,
       },
     });
 
-    // 7. Delete images from Vercel Blob using environment token
+    // 7. Delete images from Vercel Blob
     let blobCleanupSuccess = true;
 
     if (imageUrls.length > 0 && blobToken) {
