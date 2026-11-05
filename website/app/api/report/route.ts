@@ -195,12 +195,19 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Upload one image to Vercel Blob
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+    if (!blobToken) {
+      throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
+    }
+
     const fileName = `${randomUUID()}${extension}`;
 
     const blob = await put(`reports/${fileName}`, image, {
       access: "public",
       contentType: image.type,
       addRandomSuffix: false,
+      token: blobToken,
     });
 
     uploadedBlobUrl = blob.url;
