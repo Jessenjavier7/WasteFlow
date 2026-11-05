@@ -182,20 +182,38 @@ export async function PATCH(
       }
     }
 
-    // 9. Upload new image if provided
-    if (image && extension) {
+    // 9. Get Vercel Blob token
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+    // Validate token only when Blob operations are required
+    if ((image || removeExistingImage) && !blobToken) {
+      console.error("BLOB_READ_WRITE_TOKEN is not configured.");
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Blob storage is not configured. Please contact the administrator.",
+        },
+        { status: 500 },
+      );
+    }
+
+    // 10. Upload new image if provided
+    if (image && extension && blobToken) {
       const fileName = `${randomUUID()}${extension}`;
 
       const blob = await put(`reports/${fileName}`, image, {
         access: "public",
         contentType: image.type,
         addRandomSuffix: false,
+        token: blobToken,
       });
 
       uploadedBlobUrl = blob.url;
     }
 
-    // 10. Update report and image records in transaction
+    // 11. Update report and image records in transaction
     const oldImageUrls = existingReport.images.map((item) => item.imageUrl);
 
     await prisma.$transaction(async (tx) => {
@@ -238,25 +256,27 @@ export async function PATCH(
       }
     });
 
-    // 11. Delete old Blob images after transaction succeeds
+    // 12. Delete old Blob images after transaction succeeds
     const shouldDeleteOldImages =
       uploadedBlobUrl !== null || removeExistingImage;
 
-    if (shouldDeleteOldImages && oldImageUrls.length > 0) {
+    if (shouldDeleteOldImages && oldImageUrls.length > 0 && blobToken) {
       try {
-        await del(oldImageUrls);
+        await del(oldImageUrls, {
+          token: blobToken,
+        });
       } catch (deleteError) {
         // Database update already succeeded
         console.error("Failed to delete old Blob images:", deleteError);
       }
     }
 
-    // 12. Revalidate relevant pages
+    // 13. Revalidate relevant pages
     revalidatePath("/dashboard");
     revalidatePath("/reports");
     revalidatePath(`/reports/update/${reportId}`);
 
-    // 13. Return success response
+    // 14. Return success response
     return NextResponse.json(
       {
         success: true,
@@ -265,12 +285,18 @@ export async function PATCH(
       { status: 200 },
     );
   } catch (error) {
-    // 14. Cleanup uploaded Blob if database operation fails
+    // 15. Cleanup uploaded Blob if database operation fails
     if (uploadedBlobUrl) {
-      try {
-        await del(uploadedBlobUrl);
-      } catch (deleteError) {
-        console.error("Failed to delete uploaded Blob:", deleteError);
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+      if (blobToken) {
+        try {
+          await del(uploadedBlobUrl, {
+            token: blobToken,
+          });
+        } catch (deleteError) {
+          console.error("Failed to delete uploaded Blob:", deleteError);
+        }
       }
     }
 
