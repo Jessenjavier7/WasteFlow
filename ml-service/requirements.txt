@@ -1,4 +1,4 @@
-tensorflow-intel==2.18.0
+tensorflow==2.18.0
 fastapi
 uvicorn[standard]
 python-multipart
