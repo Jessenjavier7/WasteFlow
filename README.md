@@ -15,6 +15,7 @@ The system consists of three main components:
 ## Features
 
 ### Website
+
 - Role-based authentication (Admin and User).
 - Dashboard with waste report statistics.
 - Waste report management (CRUD).
@@ -24,6 +25,7 @@ The system consists of three main components:
 - Responsive interface.
 
 ### Mobile Application
+
 - User registration and login.
 - User dashboard.
 - Create waste reports with images.
@@ -32,6 +34,7 @@ The system consists of three main components:
 - Logout functionality.
 
 ### Machine Learning Service
+
 - Image-based waste classification.
 - REST API powered by FastAPI.
 - Prediction results and confidence scores.
@@ -39,17 +42,17 @@ The system consists of three main components:
 
 ## Tech Stack
 
-| Component | Technology |
-|---|---|
-| Website | Next.js, React, TypeScript |
-| Styling | Tailwind CSS |
-| Authentication | NextAuth.js |
-| ORM | Prisma |
-| Database | PostgreSQL |
-| Mobile | React Native, Expo |
-| ML Backend | Python, FastAPI |
-| Machine Learning | TensorFlow |
-| Version Control | Git, GitHub |
+| Component        | Technology                 |
+| ---------------- | -------------------------- |
+| Website          | Next.js, React, TypeScript |
+| Styling          | Tailwind CSS               |
+| Authentication   | NextAuth.js                |
+| ORM              | Prisma                     |
+| Database         | PostgreSQL                 |
+| Mobile           | React Native, Expo         |
+| ML Backend       | Python, FastAPI            |
+| Machine Learning | TensorFlow                 |
+| Version Control  | Git, GitHub                |
 
 ## Project Structure
 
@@ -58,7 +61,6 @@ smart-waste-ms/
 ├── website/
 ├── mobile/
 ├── ml-service/
-├── docs/
 └── README.md
 ```
 
@@ -77,7 +79,7 @@ Before running the project, make sure you have installed:
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/USERNAME/smart-waste-ms.git
+git clone https://github.com/Jessenjavier7/WasteFlow
 cd smart-waste-ms
 ```
 
@@ -130,11 +132,13 @@ python -m venv venv
 Activate virtual environment:
 
 **Windows:**
+
 ```bash
 venv\Scripts\activate
 ```
 
 **Linux/macOS:**
+
 ```bash
 source venv/bin/activate
 ```
@@ -142,7 +146,7 @@ source venv/bin/activate
 Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirement.txt
 ```
 
 Start FastAPI:
@@ -190,7 +194,3 @@ Contributions are welcome.
 3. Commit your changes.
 4. Push the branch.
 5. Open a Pull Request.
-
-## License
-
-This project is licensed under the MIT License. Update this section if a different license is used.
