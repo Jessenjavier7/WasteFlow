@@ -3,4 +3,3 @@ venv/
 
 # Environment Variables
 .env
-.env.*
