@@ -153,12 +153,19 @@ export async function updateReportAction(
 
     // 8. Upload new image, if provided
     if (image && extension) {
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+      if (!blobToken) {
+        throw new Error("BLOB_READ_WRITE_TOKEN is not configured.");
+      }
+
       const fileName = `${randomUUID()}${extension}`;
 
       const blob = await put(`reports/${fileName}`, image, {
         access: "public",
         contentType: image.type,
         addRandomSuffix: false,
+        token: blobToken,
       });
 
       uploadedBlobUrl = blob.url;

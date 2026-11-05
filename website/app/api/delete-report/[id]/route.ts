@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+
 import { del } from "@vercel/blob";
 
 export async function DELETE(
@@ -8,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // 1. Validasi session
+    // 1. Validate session
     const session = await auth();
 
     if (!session?.user?.id) {
@@ -21,10 +23,10 @@ export async function DELETE(
       );
     }
 
-    // 2. Ambil report ID
+    // 2. Get report ID
     const { id } = await params;
 
-    // Validasi UUID
+    // Validate UUID
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,7 +40,7 @@ export async function DELETE(
       );
     }
 
-    // 3. Cari report berdasarkan ID dan pemiliknya
+    // 3. Find report and verify ownership
     const report = await prisma.wasteReport.findFirst({
       where: {
         id,
@@ -65,29 +67,50 @@ export async function DELETE(
       );
     }
 
-    // 4. Ambil URL gambar dari Vercel Blob
+    // 4. Get image URLs
     const imageUrls = report.images.map((image) => image.imageUrl);
 
-    // 5. Hapus data report dari database
-    // Relasi ReportImage akan ikut terhapus jika menggunakan onDelete: Cascade.
+    // 5. Validate Vercel Blob token before deleting database records
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+    if (imageUrls.length > 0 && !blobToken) {
+      console.error("BLOB_READ_WRITE_TOKEN is not configured.");
+
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Blob storage is not configured. Please contact the administrator.",
+        },
+        { status: 500 },
+      );
+    }
+
+    // 6. Delete report from database
+    // Related ReportImage and status history records
+    // will be deleted if onDelete: Cascade is configured.
     await prisma.wasteReport.delete({
       where: {
         id: report.id,
       },
     });
 
-    // 6. Hapus file gambar dari Vercel Blob
+    // 7. Delete images from Vercel Blob using environment token
     let blobCleanupSuccess = true;
 
-    if (imageUrls.length > 0) {
+    if (imageUrls.length > 0 && blobToken) {
       try {
-        await del(imageUrls);
+        await del(imageUrls, {
+          token: blobToken,
+        });
       } catch (blobError) {
         blobCleanupSuccess = false;
+
         console.error("Failed to delete images from Vercel Blob:", blobError);
       }
     }
 
+    // 8. Return response
     return NextResponse.json({
       success: true,
       message: blobCleanupSuccess
@@ -95,7 +118,7 @@ export async function DELETE(
         : "Report deleted, but some images could not be removed from Blob.",
       data: {
         reportId: report.id,
-        deletedImages: imageUrls.length,
+        deletedImages: blobCleanupSuccess ? imageUrls.length : 0,
         blobCleanupSuccess,
       },
     });
